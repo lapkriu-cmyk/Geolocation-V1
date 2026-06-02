@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pendataan Lokasi Konsumen</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        input, button { padding: 12px; margin: 8px 0; width: 100%; box-sizing: border-box; border-radius: 4px; border: 1px solid #ccc; }
+        button { cursor: pointer; font-weight: bold; border: none; color: white; }
+        button.lokasi { background-color: #007BFF; }
+        button.tambah { background-color: #ff9800; }
+        button.export { background-color: #28a745; margin-top: 20px; }
+        
+        /* Seting ukuran peta agar pas di layar HP */
+        #map { height: 300px; margin: 12px 0; border-radius: 6px; border: 2px solid #ddd; z-index: 1; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .instruksi { font-size: 13px; color: #666; margin: -4px 0 10px 0; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>📍 Form Pendataan Lokasi + Peta</h2>
+        <input type="text" id="namaKonsumen" placeholder="Masukkan Nama Konsumen" required>
+        
+        <button class="lokasi" onclick="dapatkanLokasi()">1. Ambil Lokasi GPS (Otomatis)</button>
+        
+        <div id="map"></div>
+        <p class="instruksi">*Geser pin merah di atas atau klik langsung pada peta untuk menyesuaikan titik koordinat yang pas.</p>
+        
+        <input type="text" id="latitude" placeholder="Latitude" readonly>
+        <input type="text" id="longitude" placeholder="Longitude" readonly>
+        
+        <button class="tambah" onclick="tambahKeTabel()">2. ➕ Masukkan ke Tabel</button>
+
+        <table id="tabelLokasi">
+            <thead>
+                <tr>
+                    <th>Nama Konsumen</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+
+        <button class="export" onclick="exportKeExcel()">3. 📥 Export ke Excel (CSV)</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. Inisialisasi Peta (Default awal di tengah Indonesia)
+        var map = L.map('map').setView([-2.548926, 118.014863], 4);
+
+        // 2. Memuat gambar peta dari OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        // 3. Membuat Marker/Pin Merah yang BISA DIGESER (draggable: true)
+        var marker = L.marker([-2.548926, 118.014863], { draggable: true }).addTo(map);
+
+        // Fungsi untuk mengupdate teks kotak Latitude & Longitude
+        function updateInputTeks(lat, lng) {
+            document.getElementById('latitude').value = lat.toFixed(6);
+            document.getElementById('longitude').value = lng.toFixed(6);
+        }
+
+        // Deteksi jika PIN MERAH SELESAI DIGESER
+        marker.on('dragend', function (e) {
+            var posisi = marker.getLatLng();
+            updateInputTeks(posisi.lat, posisi.lng);
+        });
+
+        // Deteksi jika LAYAR PETA DIKLIK (Pin akan langsung lompat ke titik tersebut)
+        map.on('click', function(e) {
+            marker.setLatLng(e.latlng);
+            updateInputTeks(e.latlng.lat, e.latlng.lng);
+        });
+
+        // Fungsi tombol Ambil Lokasi GPS Otomatis
+        function dapatkanLokasi() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        var lat = position.coords.latitude;
+                        var lon = position.coords.longitude;
+                        
+                        // Isi kolom teks input
+                        updateInputTeks(lat, lon);
+                        
+                        // Pindahkan peta dan pin merah secara otomatis ke lokasi GPS Anda
+                        var koordinatBaru = new L.LatLng(lat, lon);
+                        marker.setLatLng(koordinatBaru);
+                        map.setView(koordinatBaru, 16); // Fokus dan perbesar (zoom) peta
+                    },
+                    function(error) {
+                        alert("Gagal membaca GPS. Silakan langsung geser pin merah pada peta secara manual.");
+                    }
+                );
+            } else {
+                alert("Browser Anda tidak mendukung Geolocation.");
+            }
+        }
+
+        // Fungsi memasukkan data ke tabel
+        function tambahKeTabel() {
+            var nama = document.getElementById('namaKonsumen').value;
+            var lat = document.getElementById('latitude').value;
+            var lon = document.getElementById('longitude').value;
+
+            if(nama === "" || lat === "" || lon === "") {
+                alert("Mohon isi nama dan tentukan lokasi di peta terlebih dahulu!");
+                return;
+            }
+
+            var tabel = document.getElementById('tabelLokasi').getElementsByTagName('tbody')[0];
+            var barisBaru = tabel.insertRow();
+            barisBaru.insertCell(0).innerHTML = nama;
+            barisBaru.insertCell(1).innerHTML = lat;
+            barisBaru.insertCell(2).innerHTML = lon;
+
+            // Kosongkan nama konsumen untuk input selanjutnya
+            document.getElementById('namaKonsumen').value = "";
+            document.getElementById('latitude').value = "";
+            document.getElementById('longitude').value = "";
+        }
+
+        // Fungsi Export ke Excel (CSV)
+        function exportKeExcel() {
+            var csv = [];
+            var baris = document.querySelectorAll("table tr");
+            
+            for (var i = 0; i < baris.length; i++) {
+                var barisData = [], kolom = baris[i].querySelectorAll("td, th");
+                for (var j = 0; j < kolom.length; j++) 
+                    barisData.push('"' + kolom[j].innerText + '"');
+                csv.push(barisData.join(","));
+            }
+
+            var csvFile = new Blob([csv.join("\n")], {type: "text/csv"});
+            var downloadLink = document.createElement("a");
+            downloadLink.download = "Data_Lokasi_Konsumen.csv";
+            downloadLink.href = window.URL.createObjectURL(csvFile);
+            downloadLink.style.display = "none";
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+        }
+    </script>
+</body>
+</html>
